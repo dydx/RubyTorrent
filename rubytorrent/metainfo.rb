@@ -155,13 +155,7 @@ class MetaInfo
   def single?; info.single?; end
   def multiple?; info.multiple?; end
 
-  def check
-    if @s.announce_list
-      @s.announce_list.each do |tier|
-        tier.each { |track| raise MetaInfoFormatError, "expecting HTTP URL in announce-list, got #{track} instead" unless track.is_a? URI::HTTP }
-      end
-    end
-  end
+  def check; end;
 
   def self.from_bstream(bs)
     dict = nil
