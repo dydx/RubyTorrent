@@ -1,0 +1,59 @@
+RubyTorrent Design
+------------------
+
+This is pretty sketchy at the moment but it might help if you want to
+do some hacking.
+
+                   
+               +---------+      +----------------+
+disk <::::::::>| Package |    /-| PeerConnection |<=== network ===> peer
+               +---------+    | +----------------+
+                    |         |
+ +---------+  +------------+ /  +----------------+
+ | Tracker |--| Controller |----| PeerConnection |<=== network ===> peer
+ +---------+  +------------+ \  +----------------+
+             /                |         .
+ +--------+ /                 |         .
+ | Server |-                  |         .
+ +--------+ \  
+             \ +---------+
+             | | Package |<:::::::> disk
+             | +---------+
+             |      |
+ +---------+ \+------------+    +----------------+
+ | Tracker |--| Controller |----| PeerConnection |<=== network ===> peer
+ +---------+  +------------+ \  +----------------+
+                             |
+                             |  +----------------+
+                             |--| PeerConnection |<=== network ===> peer
+                             |  +----------------+
+                                        .
+                                        .
+                                        .
+
+                              
+Each .torrent download is associated with a Package. A Package is
+composed of several Pieces, each corresponding to a BitTorrent
+piece. A Package provides simple aggregate operations over all the
+Pieces. Each Piece handles writing to and reading from disk (across
+potentially multiple file pointers), as well as dividing its data into
+one or more Blocks. Each Block is an in-memory section of a Piece and
+corresponds to the BitTorrent piece, transferrable across the network.
+
+One Server coordinates all BitTorrent downloads. It maintains several
+Controllers, one per .torrent download. The server handles all
+handshaking. It accepts incoming connections, shunting them to the
+appropriate Controller, and creates outgoing ones at the Controllers'
+behest. Each connection to a peer is maintained by a PeerConnection,
+which keeps track of the peer's state and the connection state.
+PeerConnections get empty Blocks from their Controller and send
+requests for them across the wire, and, upon receiving requests from
+the peer, get full Blocks from the Package and transmit them back.
+
+The Controller also keeps a Tracker object, which it uses to
+communicate with the tracker.
+
+PeerConnections are completely reactive, and are tightly integrated
+with their Controller. They rely on the Controller's heartbeat thread
+to trigger any time-dependent events, and also for propagating any
+messages to other peers.

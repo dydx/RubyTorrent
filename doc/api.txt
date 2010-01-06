@@ -1,0 +1,289 @@
+RubyTorrent Documentation
+
+Introduction
+------------
+
+RubyTorrent is a pure-Ruby BitTorrent library. You can use RubyTorrent
+in your Ruby applications to download and serve files via the
+BitTorrent protocol.  More information about BitTorrent can be found
+at http://bittorrent.com/.
+
+There's a lot going behind the scenes, but using this library is
+pretty simple: on the surface, RubyTorrent simply lets you download a
+file or set of files, given an initial .torrent filename or URL.
+
+I recommend you take a look at rtpeer.rb for an example Ruby BitTorrent
+peer that uses all this stuff.
+
+Synopsis
+--------
+
+require "rubytorrent"
+
+# simple
+bt = RubyTorrent::BitTorrent.new(filename)
+bt.on_event(self, :complete) { puts "done!" }
+
+# more complex
+mi = RubyTorrent::MetaInfo.from_location(url)
+package = RubyTorrent::Package.new(mi, dest)
+bt = RubyTorrent::BitTorrent.new(mi, package)
+thread = Thread.new do
+  until bt.complete?
+    puts "#{bt.percent_completed}% done"
+    sleep 5
+  end
+end
+bt.on_event(self, :complete) { puts "done!" }
+thread.join
+
+Overview
+--------
+
+There are three top-level classes you should be familiar with in the
+RubyTorrent module: BitTorrent, MetaInfo and Package. BitTorrent is
+the main interface; MetaInfo and Package classes allow you more
+control over the details, but they're completely options and the
+BitTorrent class will do reasonable things if you don't use them.
+
+RubyTorrent has a very event-driven interface; all methods are
+non-blocking and the BitTorrent class generates notifications of all
+interesting events, which you can subscribe to. See the documentation
+on BitTorrent#on_event() below for how to subscribe to events.
+
+RubyTorrent::MetaInfo
+---------------------
+
+This class represents the contents of the .torrent file or URL.
+
+CLASS METHODS
+
+from_location(location, http_proxy=ENV["http_proxy"])
+  Creates a MetaInfo object from a filename or URL.
+
+  Arguments:
+   location: a filename or a URL of a .torrent file.
+   http_proxy: is the HTTP proxy to be used in the case that
+    "location" is a URL (nil for none).
+
+  Returns:
+    A MetaInfo object.
+
+  Throws:
+    RubyTorrent::MetaInfoFormatError,
+    RubyTorrent::BEncodingError,
+    RubyTorrent::TypedStructError
+      if the contents of the file/url are not a BitTorrent metainfo file.
+    IOError, SystemCallError
+      if reading the contents of the file/url failed for system-level
+      issues.
+
+from_stream(stream)
+  Creates a MetaInfo object from a readable IO stream.
+
+  Arguments:
+    stream: a readable IO stream, e.g. an opened File.
+
+  Returns:
+    A MetaInfo object.
+
+  Throws:
+    same as RubyTorrent::Metainfo#from_location
+
+INSTANCE METHODS
+
+single?
+  Returns true if this .torrent contains a single file, false otherwise.
+
+multiple?
+  The opposite of single?
+
+RubyTorrent::Package
+--------------------
+
+This class represents the target file or files on disk.
+
+CLASS METHODS
+
+new(info, out=nil, validity_assumption=nil, path_sep="/") # optional block
+  Creates a Package.
+
+  Arguments:
+   info: a MetaInfo object.
+   out: if info.single?, this should be a File object corresponding to
+     the target file on disk. If info.multiple?, this should be a Dir
+     object corresponding to the target directory on disk. If nil, the
+     original filename (for single-file .torrents) or the current
+     directory (for multi-file .torrents) will be used.
+   validity_assumption: if nil, make no assumptions about the validity of
+     any files on disk. If true, assume all files on disk are complete
+     and valid. If false, assume all files on disk are incomplete and
+     invalid.  This can be used to speed up start time by skipping all
+     examination of current disk contents: if you're just starting a
+     download, you can use false; if you're serving a complete file or
+     set of files, you can use true.
+   path_sep: how to join path-name components to make paths. "/"
+     should work on both Windows and Unix worlds; I'm not sure about
+     other OSs.
+
+  Block:
+    If given, yields a "Piece" object when checking the files on
+    disk. This object has complete?() and valid?() methods. This is
+    really only useful for updating the user on the status of the
+    Package creation, which can take a long time for large files (I/O
+    time and SHA1 calculations).
+
+  Throws:
+    IOError, if the file access fails.
+
+RubyTorrent::BitTorrent
+-----------------------
+
+The main BitTorrent peer protocol interface.
+
+CLASS METHODS
+
+new(metainfo, package=nil, :host, :port, :dlratelim, :ulratelim, :http_proxy)
+  Creates a BitTorrent peer.
+
+  Arguments (all symbol arguments are optional hash pseudo-keyword arguments):
+    metainfo: a String, IO or MetaInfo object corresponding to a .torrent file.
+      In the case of a String or IO object, a MetaInfo object will be implictly
+      created with default arguments.
+    package: a Package, or nil. In the case on nil, a new Package will be
+      implicitly created with default arguments.
+    :host: the host to report to the tracker, if the source IP address of the
+      HTTP request is not correct (for weird IP masquerading issues, I suppose).
+    :port: the port to report to the tracker, if the port the BitTorrent peer is
+      listening on is not correct (likewise).
+    :dlratelim: the download rate limit in bytes/sec. This limit right now is
+      applied on a per-peer basis to the average download rate. In the future
+      this might change to something stricter/more useful.
+    :ulratelim: likewise, for the upload rate limit.
+    :http_proxy: the http_proxy used for connecting to the tracker, or nil
+      or unspecified for ENV["http_proxy"].
+
+  Throws:
+    All of the exceptions thrown by MetaInfo.new and Package.new.
+
+INSTANCE METHODS
+
+running?
+  Returns whether this client is running or not.
+
+ip
+  Returns the IP address the client is bound to, as a String (possibly "0.0.0.0")
+
+port
+  Returns the port the client is bound to.
+
+complete?
+  Returns whether the file on disk is complete or not.
+
+bytes_completed
+  Returns the number of bytes completed.
+
+total_bytes
+  Returns the total number of bytes in the target file/fileset.
+  
+percent_completed
+  Returns the percent of bytes completed.
+
+pieces_completed
+  Returns the number of BitTorrent "pieces" completed.
+
+num_pieces
+  Returns the total number of BitTorrent pieces.
+
+tracker
+  Returns the URL of the tracker being used, or nil if no tracker can be reached.
+
+num_possible_peers
+  Returns the number of peers we've read from the tracker, or nil if no tracker
+  can be reached. This is typically capped at 50.
+
+peer_info
+  Returns an array of hashes, one per current peer, with the following symbols
+  as keys:
+    :name: the peer name (probably "ip address/port")
+    :seed: true if the peer is a seed, false if it's a leecher
+    :dlamt, :ulamt: the number of bytes downloaded from /uploaded to this peer
+    :dlrate, :ulrate: the bytes/sec downloaded from/uploaded to this peer
+    :pending_send, :pending_recv: the number of blocks pending for send/receive
+    :interested, :peer_interested: who's interested in the other's pieces
+    :choking, :peer_choking: who's choking whom
+    :snubbing: whether we're snubbing this peer
+    :we_desire, :they_desire: number of pieces one has that the other wants
+  A lot of this stuff has to do with the internals of the BitTorrent wire
+  protocol, so it's mainly useful for debugging.
+
+shutdown
+  Shuts down this particular client.
+
+shutdown_all
+  Shuts down all clients.
+
+on_event(who, *events) # mandatory block
+  Registers a notification for one or more events. When one of the
+  events occurs, the block will be called. The first argument to the
+  block will be the source of the event (in this case a
+  RubyTorrent::BitTorrent object); the other arguments are dependent
+  on the block itself.
+
+  Arguments:
+    who: should be "self"
+    events: one or more event symbols (see EVENTS below)
+
+unregister_events(who, *events)
+  Unregisters event notifications. All blocks added with on_event(who, ...)
+  will be removed if they have an event in "events". If "events" is nil,
+  all blocks registered with on_event(who, ...) will be removed.
+
+  Arguments:
+    who: the same argument as was passed to on_event()
+    events: one or more event symbols.
+
+EVENTS
+
+:trying_peer |source, peer|
+  We're trying to connect to the peer "peer" (a String: "ip addr/port").
+
+:forgetting_peer |source, peer|
+  We're couldn't connect to the peer.
+ 
+:added_peer |source, peer|
+  We successfully connected to the peer.
+
+:removed_peer |source, peer|
+  We dropped our connection to the peer.
+
+:received_block |source, block, peer|
+  We received a block "block" from peer.
+
+:sent_block |source, block, peer|
+  We sent a block "block" to peer.
+
+:have_piece |source, piece|
+  We've successfully downloaded a complete piece "piece".
+
+:discarded_piece |source, piece|
+  We had to discard piece "piece" because of checksum errors
+
+:complete |source|
+  We've downloaded the entire file! Hooray!
+
+:tracker_connected |source, url|
+  We connected to tracker "url".
+
+:tracker_lost
+  We couldn't connect to tracker "url" after previously having connected to it.
+
+COPYRIGHT
+---------
+
+Copyright 2005 William Morgan
+Permission is granted to copy, distribute and/or modify this document under the
+terms of the GNU Free Documentation License, Version 1.2; with no Invariant
+Sections, no Front-Cover Texts, and no Back-Covers. A copy of the license may
+be found at http://www.gnu.org/licenses/fdl.html.
+

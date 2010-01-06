@@ -1,0 +1,25 @@
+Release notes for 0.3:
+
+Many more bug fixes. Speed is now basically comparable to Bram's client---at
+least in my limited experiments. 
+
+The following are known issues with this release:
+
+- Ruby threads don't play well with curses. Non-blocking getch hangs.
+  See [ruby-talk:130620]. So we use ncurses.
+
+- Ruby threads don't play well with TCP sockets on Windows. There is a
+  20-second *global* freeze every time an outgoing connection is made to a
+  non-responsive host. See [ruby-talk:129578], [ruby-core:04364]. As you can
+  imagine, this can be quite a performance hit in a program that can make
+  potentially hundreds of such connections. In fact, it renders RubyTorrent
+  almost useless on Windows. A patch exists (indeed, has existed for many
+  months), and if I bug Matz maybe it'll get in to 1.8.3. :)
+
+- Ruby threads don't play well with writing data over TCP sockets. At least,
+  that's what I glean from [ruby-talk:130480], and it might explain the
+  occasional freezing behavior I see (3 to 30 seconds, sporadic) under heavy
+  loads in Linux.
+
+Other than that :) everything works. I think.
+
