@@ -17,5 +17,3 @@ make-metainfo.rb: creates a .torrent file.
 
 dump-peers.rb: takes a .torrent metainfo file, connects to the tracker, and
 displays all the peers. (hack.)
-
--- William <wmorgan-rubytorrent@masanjin.net>
